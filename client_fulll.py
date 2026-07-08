@@ -18,6 +18,9 @@ import config
 
 class FulllClient:
     def __init__(self) -> None:
+        # Validation *lazy* : on ne vérifie la présence des identifiants qu'ici,
+        # c.-à-d. au moment d'un usage réel de l'API (jamais en mode démo).
+        config.ensure_fulll_credentials()
         self._access_token = config.ACCESS_TOKEN
         self._refresh_token = config.REFRESH_TOKEN
         self._load_cached_tokens()
