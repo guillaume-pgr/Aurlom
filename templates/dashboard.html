@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aurlom · Pilotage Groupe</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#1B1524;
+  --ink-2:#4A4356;
+  --muted:#6E6880;
+  --paper:#F7F6F9;
+  --card:#FFFFFF;
+  --line:#E9E6EF;
+  --violet:#5B2D8E;
+  --violet-soft:#EFEAF7;
+  --violet-mid:#B49BD6;
+  --pos:#0B7A4B;
+  --pos-bg:#E7F5EE;
+  --neg:#B42318;
+  --neg-bg:#FBEAE8;
+  --warn:#9A6700;
+  --warn-bg:#FCF3DC;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:'Inter',sans-serif;background:var(--paper);color:var(--ink);font-size:13px;line-height:1.45}
+
+/* ---------- layout ---------- */
+.shell{display:grid;grid-template-columns:196px 1fr;min-height:100vh}
+.side{background:var(--ink);color:#fff;padding:22px 0;position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
+.logo{font-family:'Space Grotesk';font-weight:700;font-size:17px;letter-spacing:.14em;padding:0 22px 4px}
+.logo-sub{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#B7AECB;padding:0 22px 26px}
+.nav a{display:block;padding:9px 22px;color:#CFC8DE;text-decoration:none;font-size:12.5px;border-left:2px solid transparent}
+.nav a:hover{color:#fff;background:rgba(255,255,255,.04)}
+.nav a.on{color:#fff;border-left-color:var(--violet-mid);background:rgba(255,255,255,.06)}
+.side-foot{margin-top:auto;padding:16px 22px;font-size:10.5px;color:#8F86A6;border-top:1px solid rgba(255,255,255,.08)}
+.side-foot b{color:#CFC8DE;font-weight:500}
+.sync-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#4ADE80;margin-right:5px}
+
+.main{padding:0 32px 56px;max-width:1240px}
+
+/* ---------- header ---------- */
+.top{display:flex;align-items:baseline;justify-content:space-between;padding:24px 0 18px;border-bottom:1px solid var(--line)}
+h1{font-family:'Space Grotesk';font-size:19px;font-weight:600}
+.period{font-size:12px;color:var(--muted)}
+.period b{color:var(--ink-2);font-weight:600}
+
+/* ---------- KPI band (signature) ---------- */
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);background:var(--card);border:1px solid var(--line);border-radius:10px;margin:20px 0 8px;overflow:hidden}
+.kpi{padding:16px 18px 14px;border-right:1px solid var(--line);position:relative}
+.kpi:last-child{border-right:none}
+.kpi .lbl{font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.kpi .val{font-family:'Space Grotesk';font-size:26px;font-weight:600;margin:6px 0 2px;font-variant-numeric:tabular-nums}
+.kpi .val small{font-size:14px;color:var(--muted);font-weight:500}
+.kpi .sub{font-size:11px;color:var(--muted)}
+.chip{display:inline-block;font-size:10.5px;font-weight:600;padding:1px 7px;border-radius:99px;margin-left:6px;font-variant-numeric:tabular-nums}
+.chip.up{color:var(--pos);background:var(--pos-bg)}
+.chip.down{color:var(--neg);background:var(--neg-bg)}
+.chip.warn{color:var(--warn);background:var(--warn-bg)}
+.spark{position:absolute;right:14px;top:16px;width:64px;height:24px;opacity:.9}
+
+/* ---------- alerts ---------- */
+.alerts{display:flex;gap:10px;margin:10px 0 34px;flex-wrap:wrap}
+.alert{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 14px;font-size:12px;color:var(--ink-2)}
+.alert i{width:7px;height:7px;border-radius:50%;flex:none}
+.alert.red i{background:var(--neg)} .alert.amb i{background:var(--warn)} .alert.vio i{background:var(--violet)}
+.alert b{font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+
+/* ---------- sections ---------- */
+section{margin-bottom:44px;scroll-margin-top:20px}
+.sec-h{display:flex;align-items:baseline;gap:12px;margin-bottom:14px}
+.sec-h h2{font-family:'Space Grotesk';font-size:15px;font-weight:600}
+.sec-h .note{font-size:11.5px;color:var(--muted)}
+.grid{display:grid;gap:14px}
+.g-83{grid-template-columns:1fr 340px}
+.g-2{grid-template-columns:1fr 1fr}
+.g-3{grid-template-columns:1fr 1fr 1fr}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 20px}
+.card h3{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:14px}
+.chart-wrap{position:relative;height:230px}
+.chart-wrap.tall{height:260px}
+.chart-wrap.short{height:190px}
+
+/* ---------- tables ---------- */
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600;text-align:right;padding:0 0 8px;border-bottom:1px solid var(--line)}
+th:first-child{text-align:left}
+td{padding:7px 0;font-size:12.5px;border-bottom:1px solid #F1EFF5;text-align:right;color:var(--ink-2)}
+td:first-child{text-align:left;color:var(--ink)}
+tr.tot td{font-weight:600;color:var(--ink);border-top:1px solid var(--line);border-bottom:none}
+tr.sub td:first-child{padding-left:14px;color:var(--muted);font-size:12px}
+.pct{color:var(--muted);font-size:11.5px}
+.d-up{color:var(--pos);font-weight:600} .d-down{color:var(--neg);font-weight:600}
+
+/* remplissage bar */
+.fill{display:inline-flex;align-items:center;gap:8px;justify-content:flex-end}
+.bar{width:70px;height:5px;background:#EEEBF4;border-radius:99px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--violet);border-radius:99px}
+
+/* ---------- scenario chips ---------- */
+.scen{display:flex;gap:6px;margin-left:auto}
+.scen button{font-family:'Inter';font-size:11.5px;font-weight:500;padding:5px 12px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--ink-2);cursor:pointer}
+.scen button.on{background:var(--violet);border-color:var(--violet);color:#fff}
+
+/* covenants — lignes lisibles + pastille statut (plus de jauge) */
+.cov{display:flex;flex-direction:column;gap:13px}
+.cov-item{display:flex;flex-direction:column;gap:3px}
+.cov-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.cov-top .nm{font-size:12px;color:var(--ink-2)}
+.cov-top .vl{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+.dot{width:8px;height:8px;border-radius:50%;flex:none}
+.dot.green{background:var(--pos)} .dot.amber{background:var(--warn)} .dot.red{background:var(--neg)}
+.cov-sub{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.echeances td{font-size:12px}
+.doc{display:inline-block;font-size:10px;font-weight:600;letter-spacing:.04em;color:var(--violet);background:var(--violet-soft);border-radius:99px;padding:1px 8px}
+
+footer{font-size:11px;color:var(--muted);border-top:1px solid var(--line);padding-top:14px}
+
+/* ---------- ajouts : toggle de mode, bouton sync, badge démo ---------- */
+.modesw{display:flex;gap:0;margin:14px 22px 0;border:1px solid rgba(255,255,255,.14);border-radius:99px;overflow:hidden}
+.modesw a{flex:1;text-align:center;padding:5px 0;font-size:11px;color:#B7AECB;text-decoration:none;letter-spacing:.04em}
+.modesw a.on{background:var(--violet-mid);color:#1B1524;font-weight:600}
+.syncbtn{display:block;width:calc(100% - 44px);margin:10px 22px 0;padding:7px 0;text-align:center;font-family:'Inter';font-size:11.5px;font-weight:600;color:#fff;background:var(--violet);border:none;border-radius:7px;cursor:pointer}
+.syncbtn:hover{background:#6d38a8}
+.badge-demo{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--warn);background:var(--warn-bg);border-radius:99px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+.realerr{background:var(--neg-bg);color:var(--neg);border:1px solid #F3C9C4;border-radius:8px;padding:8px 14px;font-size:12px;margin:10px 0}
+
+@media(max-width:1080px){
+  .shell{grid-template-columns:1fr}
+  .side{position:static;height:auto;flex-direction:row;align-items:center;gap:10px;padding:12px 16px}
+  .logo{padding:0}.logo-sub,.side-foot,.modesw,.syncbtn{display:none}
+  .nav{display:flex;overflow:auto}.nav a{border-left:none;padding:8px 12px}
+  .kpis{grid-template-columns:1fr 1fr}
+  .g-83,.g-2,.g-3{grid-template-columns:1fr}
+}
+</style>
+</head>
+{% macro badge(key) %}{% if mode == 'real' and key in d.demo_blocks %}<span class="badge-demo">démo</span>{% endif %}{% endmacro %}
+<body>
+<div class="shell">
+
+<aside class="side">
+  <div class="logo">AURLOM</div>
+  <div class="logo-sub">Pilotage Groupe</div>
+  <nav class="nav">
+    <a href="#synthese" class="on">Synthèse</a>
+    <a href="#pnl">P&amp;L</a>
+    <a href="#cash">Trésorerie</a>
+    <a href="#etudiants">Étudiants</a>
+    <a href="#previsionnel">Prévisionnel 12M</a>
+  </nav>
+
+  <div class="modesw">
+    <a href="/?mode=demo" class="{{ 'on' if mode == 'demo' else '' }}">demo</a>
+    <a href="/?mode=real" class="{{ 'on' if mode == 'real' else '' }}">real</a>
+  </div>
+  <form method="post" action="/sync"><button class="syncbtn" type="submit">↻ Synchroniser fulll</button></form>
+
+  <div class="side-foot">
+    <span class="sync-dot"></span>Sync fulll · <b>{{ d.meta.sync_fulll }}</b><br>
+    Comptes bancaires · <b>{{ d.meta.sync_banques }}</b>
+  </div>
+</aside>
+
+<main class="main">
+
+<div class="top">
+  <h1>{{ d.meta.titre }}</h1>
+  <div class="period">Exercice {{ d.meta.exercice }} · YTD <b>{{ d.meta.ytd }}</b> · mise à jour <b>{{ d.meta.maj }}</b></div>
+</div>
+
+{% if d.meta.real_error %}<div class="realerr">Mode real indisponible ({{ d.meta.real_error }}) — affichage des données démo. Lancez une synchronisation.</div>{% endif %}
+
+<!-- ============ KPI BAND ============ -->
+<section id="synthese">
+<div class="kpis">
+  {% for k in d.kpis %}
+  <div class="kpi">
+    <div class="lbl">{{ k.lbl }}{% if mode == 'real' and k.demo %}<span class="badge-demo">démo</span>{% endif %}</div>
+    <div class="val">{{ k.val }}{% if k.unit %} <small>{{ k.unit }}</small>{% endif %}</div>
+    <div class="sub">{{ k.sub }}{% if k.chip %} <span class="chip {{ k.chip_cls }}">{{ k.chip }}</span>{% endif %}</div>
+    <svg class="spark" viewBox="0 0 64 24"><polyline points="{{ k.spark }}" fill="none" stroke="{{ k.spark_color }}" stroke-width="1.5"/></svg>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="alerts">
+  {% for a in d.alerts %}
+  <div class="alert {{ a.cls }}"><i></i>{{ a.pre }}<b>{{ a.b }}</b>{{ a.post }}</div>
+  {% endfor %}
+  {{ badge('alerts') }}
+</div>
+</section>
+
+<!-- ============ P&L ============ -->
+<section id="pnl">
+<div class="sec-h"><h2>Compte de résultat</h2><span class="note">{{ d.pnl_note }}</span>{{ badge('pnl') }}</div>
+<div class="grid g-83">
+  <div class="card">
+    <h3>CA mensuel — réel · budget · N-1</h3>
+    <div class="chart-wrap tall"><canvas id="chCA"></canvas></div>
+  </div>
+  <div class="card">
+    <h3>P&amp;L YTD synthétique</h3>
+    <table>
+      <tr><th>Poste</th><th>k€</th><th>vs N-1</th></tr>
+      {% for r in d.pnl_table %}
+      <tr class="{{ r.cls }}"><td>{{ r.label }}{% if r.pct %} <span class="pct">{{ r.pct }}</span>{% endif %}</td><td>{{ r.val | fmt }}</td><td class="{{ r.delta_cls }}">{{ r.delta }}</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+</section>
+
+<!-- ============ CASH ============ -->
+<section id="cash">
+<div class="sec-h"><h2>Trésorerie</h2><span class="note">position consolidée · prévision 13 semaines</span>{{ badge('cash') }}</div>
+<div class="grid g-83">
+  <div class="card">
+    <h3>Solde de trésorerie — réalisé &amp; projeté (13 sem.)</h3>
+    <div class="chart-wrap tall"><canvas id="chCash"></canvas></div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <div class="card">
+      <h3>Covenants LBO</h3>
+      <div class="cov">
+        {% for c in d.covenants %}
+        <div class="cov-item">
+          <div class="cov-top">
+            <span class="nm">{{ c.name }}</span>
+            <span class="vl"><span class="dot {{ c.status }}"></span>{{ c.value }}</span>
+          </div>
+          <div class="cov-sub">{{ c.rule }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="card">
+      <h3>Prochaines échéances LBO</h3>
+      <table class="echeances">
+        {% for e in d.echeances %}
+        <tr><td>{{ e.label }}</td><td>{{ e.date }}</td><td>{% if e.amount %}<b>{{ e.amount }}</b>{% else %}<span class="doc">doc</span>{% endif %}</td></tr>
+        {% endfor %}
+      </table>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============ ÉTUDIANTS ============ -->
+<section id="etudiants">
+<div class="sec-h"><h2>Étudiants &amp; campus</h2><span class="note">rentrée 2026 en cours de constitution</span>{{ badge('etudiants') }}</div>
+<div class="grid g-3">
+  <div class="card">
+    <h3>Inscriptions cumulées — rentrée 2026 vs 2025</h3>
+    <div class="chart-wrap short"><canvas id="chInscr"></canvas></div>
+  </div>
+  <div class="card">
+    <h3>Répartition par filière</h3>
+    <div class="chart-wrap short"><canvas id="chFil"></canvas></div>
+  </div>
+  <div class="card">
+    <h3>Acquisition</h3>
+    <table>
+      <tr><th>Indicateur</th><th>YTD</th><th>N-1</th></tr>
+      {% for a in d.acquisition %}
+      <tr><td>{{ a.label }}</td><td>{{ a.ytd }}</td><td class="{{ a.n1_cls }}">{{ a.n1 }}</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+<div class="card" style="margin-top:14px">
+  <h3>Performance par campus</h3>
+  <table>
+    <tr><th>Campus</th><th>Étudiants</th><th>Capacité</th><th>Remplissage</th><th>CA YTD k€</th><th>EBITDA k€</th><th>Marge</th></tr>
+    {% for c in d.campus %}
+    <tr><td>{{ c.nom }}</td><td>{{ c.etu }}</td><td>{{ c.cap }}</td><td><span class="fill"><span class="bar"><i style="width:{{ c.fill }}%"></i></span>{{ c.fill }} %</span></td><td>{{ c.ca }}</td><td>{{ c.ebitda }}</td><td>{{ c.marge }}</td></tr>
+    {% endfor %}
+  </table>
+</div>
+</section>
+
+<!-- ============ PRÉVISIONNEL ============ -->
+<section id="previsionnel">
+<div class="sec-h">
+  <h2>Prévisionnel 12 mois glissant</h2><span class="note">juil. 2026 → juin 2027</span>{{ badge('previsionnel') }}
+  <div class="scen">
+    <button class="on" data-s="base">Base</button>
+    <button data-s="low">Rentrée −10 %</button>
+    <button data-s="high">Rentrée +10 %</button>
+  </div>
+</div>
+<div class="grid g-2">
+  <div class="card">
+    <h3>P&amp;L — CA &amp; EBITDA mensuels (k€)</h3>
+    <div class="chart-wrap"><canvas id="chFcstPL"></canvas></div>
+  </div>
+  <div class="card">
+    <h3>Trésorerie projetée (M€)</h3>
+    <div class="chart-wrap"><canvas id="chFcstCash"></canvas></div>
+  </div>
+</div>
+</section>
+
+<footer>{{ d.meta.footer }}</footer>
+
+</main>
+</div>
+
+<script>
+const D = {{ d.charts | tojson }};
+const V='#5B2D8E', VS='#C9B8E4', GRAY='#C6C1D2', INK='#1B1524';
+Chart.defaults.font.family='Inter';
+Chart.defaults.font.size=10.5;
+Chart.defaults.color='#6E6880';
+const grid={color:'#F0EDF5'}, noGrid={display:false};
+
+/* Helper de format unique — mêmes règles que le fmt() Python :
+   négatifs entre parenthèses, zéro '-', espace milliers, virgule décimale. */
+function fmt(x, dec){
+ if(x===null || x===undefined || x===0) return '-';
+ dec = dec || 0;
+ const neg = x < 0;
+ const s = Math.abs(x).toLocaleString('fr-FR',{minimumFractionDigits:dec,maximumFractionDigits:dec});
+ return neg ? '('+s+')' : s;
+}
+
+/* Datalabels désactivés par défaut (activés au cas par cas). */
+if(window.ChartDataLabels){ Chart.defaults.set('plugins.datalabels', {display:false}); }
+
+/* Tooltips : valeur formatée via fmt() (2 décimales sous 100, ex. M€). */
+Chart.defaults.plugins.tooltip.callbacks={label:function(c){
+ const iy = c.chart.options.indexAxis === 'y';
+ const v = iy ? c.parsed.x : c.parsed.y;
+ const dec = (v!==null && Math.abs(v) < 100) ? 2 : 0;
+ return (c.dataset.label ? c.dataset.label+' : ' : '') + fmt(v, dec);
+}};
+
+/* Plugin : fine ligne verticale grise après la catégorie d'index `after`
+   (sépare les mois de la zone des totaux). */
+function vSep(after){return{id:'vsep_'+after,afterDatasetsDraw(chart){
+ const xs=chart.scales.x; if(!xs) return;
+ const x=(xs.getPixelForValue(after)+xs.getPixelForValue(after+1))/2;
+ const a=chart.chartArea, g=chart.ctx;
+ g.save();g.strokeStyle='#D9D4E4';g.lineWidth=1;
+ g.beginPath();g.moveTo(x,a.top);g.lineTo(x,a.bottom);g.stroke();g.restore();
+}};}
+
+/* CA mensuel — réel · budget, axe Y visible.
+   + 2 barres de totaux (YTD N violet, Budget N gris clair) avec datalabels M€.
+   Datalabels affichés UNIQUEMENT sur les 2 totaux (jamais de "-" sur les mois). */
+new Chart(chCA,{data:{labels:[...D.pnl.labels,'YTD N','Budget N'],datasets:[
+ {type:'bar',label:'Réel',data:[...D.pnl.reel,null,null],backgroundColor:V,borderRadius:3,barPercentage:.75,datalabels:{display:false}},
+ {type:'line',label:'Budget',data:[...D.pnl.budget,null,null],borderColor:INK,borderDash:[4,3],borderWidth:1.5,pointRadius:0,datalabels:{display:false}},
+ {type:'bar',label:'Totaux',yAxisID:'yTot',data:[...Array(D.pnl.labels.length).fill(null),D.pnl.total_n,D.pnl.total_budget],
+  backgroundColor:c=>c.dataIndex===D.pnl.labels.length?V:GRAY,borderRadius:3,barPercentage:.75,
+  datalabels:{display:c=>c.dataset.data[c.dataIndex]!=null,anchor:'end',align:'top',offset:2,color:INK,font:{size:10,weight:600},formatter:v=>(v/1000).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})}}
+]},plugins:[ChartDataLabels,vSep(D.pnl.labels.length-1)],options:{maintainAspectRatio:false,layout:{padding:{top:14}},plugins:{legend:{position:'top',align:'end',labels:{boxWidth:8,boxHeight:8,usePointStyle:true},filter:i=>i.text!=='Totaux'}},scales:{x:{grid:noGrid,ticks:{minRotation:0,maxRotation:0,font:{size:9.5}}},y:{grace:'8%',grid:grid,ticks:{callback:v=>v/1000+' M€'}},yTot:{display:false,min:0,grace:'12%'}}}});
+
+/* Cash 13 sem */
+new Chart(chCash,{type:'line',data:{labels:D.cash.labels,datasets:[
+ {label:'Réalisé',data:D.cash.realise,borderColor:V,borderWidth:2,pointRadius:0,fill:{target:'origin'},backgroundColor:'rgba(91,45,142,.06)'},
+ {label:'Projeté',data:D.cash.projete,borderColor:V,borderDash:[5,4],borderWidth:2,pointRadius:0},
+ {label:'Seuil covenant 1,0 M€',data:D.cash.seuil,borderColor:'#B42318',borderWidth:1,borderDash:[2,3],pointRadius:0}
+]},options:{maintainAspectRatio:false,plugins:{legend:{position:'top',align:'end',labels:{boxWidth:8,boxHeight:8,usePointStyle:true}}},scales:{x:{grid:noGrid},y:{min:0,grid:grid,ticks:{callback:v=>v.toFixed(1)+' M€'}}}}});
+
+/* Inscriptions cumulées */
+new Chart(chInscr,{type:'line',data:{labels:D.inscr.labels,datasets:[
+ {label:'2026',data:D.inscr.d2026,borderColor:V,borderWidth:2,pointRadius:0},
+ {label:'2025',data:D.inscr.d2025,borderColor:GRAY,borderWidth:1.5,pointRadius:0}
+]},options:{maintainAspectRatio:false,plugins:{legend:{position:'top',align:'end',labels:{boxWidth:8,boxHeight:8,usePointStyle:true}}},scales:{x:{grid:noGrid},y:{grid:grid}}}});
+
+/* Filières */
+new Chart(chFil,{type:'bar',data:{labels:D.fil.labels,datasets:[{data:D.fil.data,backgroundColor:D.fil.colors,borderRadius:3,barPercentage:.65}]},options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:grid},y:{grid:noGrid}}}});
+
+/* Prévisionnel 12M */
+const F=D.scen.labels;
+const scen=D.scen;
+const sum=a=>a.reduce((x,y)=>x+(y||0),0);
+const N=F.length;                       // 12 mois
+const nulls=n=>Array(n).fill(null);
+/* Prépare les 4 séries du P&L pour un scénario : mensuels + colonne Total 12M. */
+function plData(s){return{
+ ca:[...s.ca,null], eb:[...s.eb,null],
+ caT:[...nulls(N),sum(s.ca)], ebT:[...nulls(N),sum(s.eb)]
+};}
+let pd=plData(scen.base);
+const chPL=new Chart(chFcstPL,{data:{labels:[...F,'Total 12M'],datasets:[
+ {type:'bar',label:'CA',data:pd.ca,backgroundColor:VS,borderRadius:3,barPercentage:.55,datalabels:{display:false}},
+ {type:'line',label:'EBITDA',data:pd.eb,borderColor:V,borderWidth:2,pointRadius:0,datalabels:{display:false}},
+ {type:'bar',label:'CA total',yAxisID:'yTot',data:pd.caT,backgroundColor:V,borderRadius:3,barPercentage:.55,
+  datalabels:{display:true,anchor:'end',align:'top',offset:2,color:INK,font:{size:10,weight:600},formatter:v=>fmt(v)}},
+ {type:'line',label:'EBITDA total',yAxisID:'yTot',data:pd.ebT,borderColor:V,showLine:false,pointRadius:4,pointBackgroundColor:V,
+  datalabels:{display:true,anchor:'end',align:'top',offset:4,color:V,font:{size:10,weight:600},formatter:v=>fmt(v)}}
+]},plugins:[ChartDataLabels,vSep(N-1)],options:{maintainAspectRatio:false,layout:{padding:{top:14}},plugins:{legend:{position:'top',align:'end',labels:{boxWidth:8,boxHeight:8,usePointStyle:true},filter:i=>i.text.indexOf('total')<0}},scales:{x:{grid:noGrid},y:{grace:'8%',grid:grid},yTot:{display:false,min:0,grace:'12%'}}}});
+const chC=new Chart(chFcstCash,{type:'line',data:{labels:F,datasets:[
+ {label:'Trésorerie',data:scen.base.cash,borderColor:V,borderWidth:2,pointRadius:0,fill:{target:'origin'},backgroundColor:'rgba(91,45,142,.06)'},
+ {label:'Seuil 1,0 M€',data:scen.seuil,borderColor:'#B42318',borderWidth:1,borderDash:[2,3],pointRadius:0}
+]},options:{maintainAspectRatio:false,plugins:{legend:{position:'top',align:'end',labels:{boxWidth:8,boxHeight:8,usePointStyle:true}}},scales:{x:{grid:noGrid},y:{grid:grid,ticks:{callback:v=>v.toFixed(1)+' M€'}}}}});
+
+document.querySelectorAll('.scen button').forEach(b=>b.onclick=()=>{
+ document.querySelectorAll('.scen button').forEach(x=>x.classList.remove('on'));
+ b.classList.add('on');
+ const s=scen[b.dataset.s];
+ const p=plData(s);
+ chPL.data.datasets[0].data=p.ca;chPL.data.datasets[1].data=p.eb;
+ chPL.data.datasets[2].data=p.caT;chPL.data.datasets[3].data=p.ebT;chPL.update();
+ chC.data.datasets[0].data=s.cash;chC.update();
+});
+
+/* nav active on scroll */
+const links=[...document.querySelectorAll('.nav a')];
+const secs=links.map(a=>document.querySelector(a.getAttribute('href')));
+addEventListener('scroll',()=>{
+ let i=secs.findLastIndex(s=>s.getBoundingClientRect().top<120);
+ links.forEach((a,k)=>a.classList.toggle('on',k===Math.max(0,i)));
+},{passive:true});
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+# Ne jamais téléverser vers Vercel
+.env
+env
+.tokens.json
+*.db
+data.db
+__pycache__/
+*.pyc
+.venv/
+venv/
+.vercel/
+dashboard_aurlom_mockup.html

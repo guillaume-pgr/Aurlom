@@ -1,0 +1,20 @@
+# Secrets
+.env
+env
+.tokens.json
+
+# Database
+data.db
+*.db
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Vercel
+.vercel/
+
+# Divers
+*.tmp
