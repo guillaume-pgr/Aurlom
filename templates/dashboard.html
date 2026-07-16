@@ -1,250 +1,257 @@
+{#
+  Dashboard Aurlom — gabarit Jinja2 issu de dashboard_aurlom_mockup_v4_responsive.html.
+
+  Règle : ZÉRO chiffre en dur ici. Toutes les valeurs viennent de
+  get_dashboard_data() (cf. datasource.py / demo_data.py), soit par boucle
+  Jinja2, soit via les blocs JSON injectés dans le <script> en bas de page.
+
+  Le système responsive du mockup (html{font-size:clamp(...)}, tout en rem,
+  applyChartScale() au resize) est repris tel quel : ne pas le réécrire.
+#}
+{# Badge « démo » : affiché en mode réel sur les blocs non calculables. #}
+{% macro badge(key) %}{% if mode == 'real' and key in d.demo_blocks %}<span class="badge-demo">démo</span>{% endif %}{% endmacro %}
 <!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Aurlom · Pilotage Groupe</title>
+<title>Aurlom · Suivi KPIs</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --ink:#1B1524;
-  --ink-2:#4A4356;
-  --muted:#6E6880;
-  --paper:#F7F6F9;
-  --card:#FFFFFF;
-  --line:#E9E6EF;
-  --violet:#5B2D8E;
-  --violet-soft:#EFEAF7;
-  --violet-mid:#B49BD6;
-  --pos:#0B7A4B;
-  --pos-bg:#E7F5EE;
-  --neg:#B42318;
-  --neg-bg:#FBEAE8;
-  --warn:#9A6700;
-  --warn-bg:#FCF3DC;
+  --ink:#1B1524;--ink-2:#4A4356;--muted:#6E6880;--paper:#F7F6F9;--card:#FFFFFF;--line:#E9E6EF;
+  --violet:#5B2D8E;--violet-soft:#EFEAF7;--violet-mid:#B49BD6;
+  --pos:#0B7A4B;--pos-bg:#E7F5EE;--neg:#B42318;--neg-bg:#FBEAE8;--warn:#9A6700;--warn-bg:#FCF3DC;
 }
 *{margin:0;padding:0;box-sizing:border-box}
-html{scroll-behavior:smooth}
-body{font-family:'Inter',sans-serif;background:var(--paper);color:var(--ink);font-size:13px;line-height:1.45}
+/* Échelle fluide : tout le layout est en rem, la racine suit la largeur d'écran.
+   Base 16px pour ≈1500px de large (sidebar 12.25rem + contenu 77.5rem + paddings). */
+html{font-size:clamp(11px,1.067vw,20px)}
+body{font-family:'Inter',sans-serif;background:var(--paper);color:var(--ink);font-size:.8125rem;line-height:1.45}
 
-/* ---------- layout ---------- */
-.shell{display:grid;grid-template-columns:196px 1fr;min-height:100vh}
-.side{background:var(--ink);color:#fff;padding:22px 0;position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
-.logo{font-family:'Space Grotesk';font-weight:700;font-size:17px;letter-spacing:.14em;padding:0 22px 4px}
-.logo-sub{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#B7AECB;padding:0 22px 26px}
-.nav a{display:block;padding:9px 22px;color:#CFC8DE;text-decoration:none;font-size:12.5px;border-left:2px solid transparent}
+.shell{display:grid;grid-template-columns:12.25rem 1fr;min-height:100vh}
+.side{background:var(--ink);color:#fff;padding:1.375rem 0;position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
+.logo{font-family:'Space Grotesk';font-weight:700;font-size:1.0625rem;letter-spacing:.14em;padding:0 1.375rem .25rem}
+.logo-sub{font-size:.625rem;letter-spacing:.12em;text-transform:uppercase;color:#B7AECB;padding:0 1.375rem 1.625rem}
+.nav a{display:block;padding:.625rem 1.375rem;color:#CFC8DE;text-decoration:none;font-size:.78125rem;border-left:2px solid transparent;cursor:pointer}
 .nav a:hover{color:#fff;background:rgba(255,255,255,.04)}
 .nav a.on{color:#fff;border-left-color:var(--violet-mid);background:rgba(255,255,255,.06)}
-.side-foot{margin-top:auto;padding:16px 22px;font-size:10.5px;color:#8F86A6;border-top:1px solid rgba(255,255,255,.08)}
+.mode{display:flex;margin:1.375rem 1.125rem 0;border:1px solid rgba(255,255,255,.18);border-radius:99px;overflow:hidden}
+.mode span{flex:1;text-align:center;padding:.3125rem 0;font-size:.6875rem;cursor:default}
+.mode .on{background:var(--violet-mid);color:var(--ink);font-weight:600}
+.syncbtn{margin:.75rem 1.125rem 0;background:var(--violet);border:none;color:#fff;font-family:'Inter';font-size:.75rem;font-weight:500;padding:.5625rem;border-radius:.5rem;cursor:pointer}
+.side-foot{margin-top:auto;padding:1rem 1.375rem;font-size:.65625rem;color:#8F86A6;border-top:1px solid rgba(255,255,255,.08)}
 .side-foot b{color:#CFC8DE;font-weight:500}
-.sync-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#4ADE80;margin-right:5px}
+.sync-dot{display:inline-block;width:.375rem;height:.375rem;border-radius:50%;background:#4ADE80;margin-right:.3125rem}
 
-.main{padding:0 32px 56px;max-width:1240px}
-
-/* ---------- header ---------- */
-.top{display:flex;align-items:baseline;justify-content:space-between;padding:24px 0 18px;border-bottom:1px solid var(--line)}
-h1{font-family:'Space Grotesk';font-size:19px;font-weight:600}
-.period{font-size:12px;color:var(--muted)}
+.main{padding:0 2rem 3.5rem;max-width:77.5rem}
+.top{display:flex;align-items:baseline;justify-content:space-between;padding:1.5rem 0 1.125rem;border-bottom:1px solid var(--line)}
+h1{font-family:'Space Grotesk';font-size:1.1875rem;font-weight:600}
+.period{font-size:.75rem;color:var(--muted)}
 .period b{color:var(--ink-2);font-weight:600}
 
-/* ---------- KPI band (signature) ---------- */
-.kpis{display:grid;grid-template-columns:repeat(5,1fr);background:var(--card);border:1px solid var(--line);border-radius:10px;margin:20px 0 8px;overflow:hidden}
-.kpi{padding:16px 18px 14px;border-right:1px solid var(--line);position:relative}
+.tab{display:none}
+.tab.on{display:block}
+
+/* KPI band */
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);background:var(--card);border:1px solid var(--line);border-radius:.625rem;margin:1.25rem 0 .5rem;overflow:hidden}
+.kpis.c6{grid-template-columns:repeat(6,1fr)}
+.kpis.c4{grid-template-columns:repeat(4,1fr)}
+.kpi{padding:1rem 1.125rem .875rem;border-right:1px solid var(--line);position:relative}
 .kpi:last-child{border-right:none}
-.kpi .lbl{font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
-.kpi .val{font-family:'Space Grotesk';font-size:26px;font-weight:600;margin:6px 0 2px;font-variant-numeric:tabular-nums}
-.kpi .val small{font-size:14px;color:var(--muted);font-weight:500}
-.kpi .sub{font-size:11px;color:var(--muted)}
-.chip{display:inline-block;font-size:10.5px;font-weight:600;padding:1px 7px;border-radius:99px;margin-left:6px;font-variant-numeric:tabular-nums}
+.kpis.c4 .kpi:nth-child(4n){border-right:none}
+.kpis.c4 .kpi:nth-child(-n+4){border-bottom:1px solid var(--line)}
+.kpi .lbl{font-size:.625rem;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.kpi .val{font-family:'Space Grotesk';font-size:1.5rem;font-weight:600;margin:.375rem 0 .125rem;font-variant-numeric:tabular-nums}
+.kpi .val small{font-size:.8125rem;color:var(--muted);font-weight:500}
+.kpi .sub{font-size:.6875rem;color:var(--muted)}
+.chip{display:inline-block;font-size:.65625rem;font-weight:600;padding:.0625rem .4375rem;border-radius:99px;margin-left:.3125rem;font-variant-numeric:tabular-nums}
 .chip.up{color:var(--pos);background:var(--pos-bg)}
 .chip.down{color:var(--neg);background:var(--neg-bg)}
 .chip.warn{color:var(--warn);background:var(--warn-bg)}
-.spark{position:absolute;right:14px;top:16px;width:64px;height:24px;opacity:.9}
 
-/* ---------- alerts ---------- */
-.alerts{display:flex;gap:10px;margin:10px 0 34px;flex-wrap:wrap}
-.alert{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 14px;font-size:12px;color:var(--ink-2)}
-.alert i{width:7px;height:7px;border-radius:50%;flex:none}
+.alerts{display:flex;gap:.625rem;margin:.625rem 0 1.875rem;flex-wrap:wrap}
+.alert{display:flex;align-items:center;gap:.5rem;background:var(--card);border:1px solid var(--line);border-radius:.5rem;padding:.5rem .875rem;font-size:.75rem;color:var(--ink-2)}
+.alert i{width:.4375rem;height:.4375rem;border-radius:50%;flex:none}
 .alert.red i{background:var(--neg)} .alert.amb i{background:var(--warn)} .alert.vio i{background:var(--violet)}
 .alert b{font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
 
-/* ---------- sections ---------- */
-section{margin-bottom:44px;scroll-margin-top:20px}
-.sec-h{display:flex;align-items:baseline;gap:12px;margin-bottom:14px}
-.sec-h h2{font-family:'Space Grotesk';font-size:15px;font-weight:600}
-.sec-h .note{font-size:11.5px;color:var(--muted)}
-.grid{display:grid;gap:14px}
-.g-83{grid-template-columns:1fr 340px}
+section{margin-bottom:2.5rem}
+.sec-h{display:flex;align-items:baseline;gap:.75rem;margin-bottom:.875rem}
+.sec-h h2{font-family:'Space Grotesk';font-size:.9375rem;font-weight:600}
+.sec-h .note{font-size:.71875rem;color:var(--muted)}
+.grid{display:grid;gap:.875rem}
+.g-83{grid-template-columns:1fr 21.25rem}
 .g-2{grid-template-columns:1fr 1fr}
 .g-3{grid-template-columns:1fr 1fr 1fr}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 20px}
-.card h3{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:14px}
-.chart-wrap{position:relative;height:230px}
-.chart-wrap.tall{height:260px}
-.chart-wrap.short{height:190px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:.625rem;padding:1.125rem 1.25rem}
+.card h3{font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:.875rem}
+.chart-wrap{position:relative;height:14.375rem}
+.chart-wrap.tall{height:16.25rem}
+.chart-wrap.short{height:11.875rem}
+.chart-wrap.half{height:10.9375rem}
 
-/* ---------- tables ---------- */
 table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
-th{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600;text-align:right;padding:0 0 8px;border-bottom:1px solid var(--line)}
+th{font-size:.625rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600;text-align:right;padding:0 0 .5rem;border-bottom:1px solid var(--line)}
 th:first-child{text-align:left}
-td{padding:7px 0;font-size:12.5px;border-bottom:1px solid #F1EFF5;text-align:right;color:var(--ink-2)}
+td{padding:.4375rem 0;font-size:.78125rem;border-bottom:1px solid #F1EFF5;text-align:right;color:var(--ink-2)}
 td:first-child{text-align:left;color:var(--ink)}
 tr.tot td{font-weight:600;color:var(--ink);border-top:1px solid var(--line);border-bottom:none}
-tr.sub td:first-child{padding-left:14px;color:var(--muted);font-size:12px}
-.pct{color:var(--muted);font-size:11.5px}
+tr.sub td:first-child{padding-left:.875rem;color:var(--muted);font-size:.75rem}
+.pct{color:var(--muted);font-size:.71875rem}
 .d-up{color:var(--pos);font-weight:600} .d-down{color:var(--neg);font-weight:600}
-
-/* remplissage bar */
-.fill{display:inline-flex;align-items:center;gap:8px;justify-content:flex-end}
-.bar{width:70px;height:5px;background:#EEEBF4;border-radius:99px;overflow:hidden}
+.fill{display:inline-flex;align-items:center;gap:.5rem;justify-content:flex-end}
+.bar{width:4rem;height:.3125rem;background:#EEEBF4;border-radius:99px;overflow:hidden}
 .bar i{display:block;height:100%;background:var(--violet);border-radius:99px}
 
-/* ---------- scenario chips ---------- */
-.scen{display:flex;gap:6px;margin-left:auto}
-.scen button{font-family:'Inter';font-size:11.5px;font-weight:500;padding:5px 12px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--ink-2);cursor:pointer}
+.cov{display:flex;flex-direction:column;gap:.75rem}
+.cov-item{display:flex;justify-content:space-between;align-items:center}
+.cov-item .cn{font-size:.75rem;color:var(--ink-2)}
+.cov-item .cn small{display:block;font-size:.6875rem;color:var(--muted)}
+.cov-item .cv{font-family:'Space Grotesk';font-weight:600;font-size:1rem;display:flex;align-items:center;gap:.4375rem}
+.dot{width:.5rem;height:.5rem;border-radius:50%}
+.dot.ok{background:var(--pos)} .dot.ko{background:var(--neg)}
+.doc{font-size:.625rem;font-weight:600;background:var(--violet-soft);color:var(--violet);padding:.0625rem .5rem;border-radius:99px}
+
+.camp-sel{display:flex;gap:.375rem;flex-wrap:wrap;margin:1.25rem 0 1.375rem}
+.camp-sel button{font-family:'Inter';font-size:.71875rem;font-weight:500;padding:.375rem .8125rem;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--ink-2);cursor:pointer}
+.camp-sel button.on{background:var(--violet);border-color:var(--violet);color:#fff}
+
+.scen{display:flex;gap:.375rem;margin-left:auto}
+.scen button{font-family:'Inter';font-size:.71875rem;font-weight:500;padding:.3125rem .75rem;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--ink-2);cursor:pointer}
 .scen button.on{background:var(--violet);border-color:var(--violet);color:#fff}
+.hyp{font-size:.78125rem;color:var(--ink-2);line-height:1.9}
+.hyp b{color:var(--ink)}
+.pts{font-size:.78125rem;color:var(--ink-2);line-height:1.9}
+.pts .num{display:inline-flex;align-items:center;justify-content:center;width:1rem;height:1rem;border-radius:50%;background:var(--violet);color:#fff;font-size:.625rem;font-weight:600;margin-right:.5rem}
+.pts b{color:var(--ink);font-variant-numeric:tabular-nums}
 
-/* covenants — lignes lisibles + pastille statut (plus de jauge) */
-.cov{display:flex;flex-direction:column;gap:13px}
-.cov-item{display:flex;flex-direction:column;gap:3px}
-.cov-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.cov-top .nm{font-size:12px;color:var(--ink-2)}
-.cov-top .vl{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
-.dot{width:8px;height:8px;border-radius:50%;flex:none}
-.dot.green{background:var(--pos)} .dot.amber{background:var(--warn)} .dot.red{background:var(--neg)}
-.cov-sub{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
-.echeances td{font-size:12px}
-.doc{display:inline-block;font-size:10px;font-weight:600;letter-spacing:.04em;color:var(--violet);background:var(--violet-soft);border-radius:99px;padding:1px 8px}
+.hleg{display:flex;gap:.75rem;justify-content:flex-end;font-size:.6875rem;color:var(--muted);margin:-.375rem 0 .5rem}
+.hleg i{display:inline-block;width:.5rem;height:.5rem;border-radius:50%;margin-right:.3125rem}
 
-footer{font-size:11px;color:var(--muted);border-top:1px solid var(--line);padding-top:14px}
-
-/* ---------- ajouts : toggle de mode, bouton sync, badge démo ---------- */
-.modesw{display:flex;gap:0;margin:14px 22px 0;border:1px solid rgba(255,255,255,.14);border-radius:99px;overflow:hidden}
-.modesw a{flex:1;text-align:center;padding:5px 0;font-size:11px;color:#B7AECB;text-decoration:none;letter-spacing:.04em}
-.modesw a.on{background:var(--violet-mid);color:#1B1524;font-weight:600}
-.syncbtn{display:block;width:calc(100% - 44px);margin:10px 22px 0;padding:7px 0;text-align:center;font-family:'Inter';font-size:11.5px;font-weight:600;color:#fff;background:var(--violet);border:none;border-radius:7px;cursor:pointer}
-.syncbtn:hover{background:#6d38a8}
-.badge-demo{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--warn);background:var(--warn-bg);border-radius:99px;padding:1px 7px;margin-left:6px;vertical-align:middle}
-.realerr{background:var(--neg-bg);color:var(--neg);border:1px solid #F3C9C4;border-radius:8px;padding:8px 14px;font-size:12px;margin:10px 0}
+footer{font-size:.6875rem;color:var(--muted);border-top:1px solid var(--line);padding-top:.875rem}
 
 @media(max-width:1080px){
+  html{font-size:12px}
   .shell{grid-template-columns:1fr}
-  .side{position:static;height:auto;flex-direction:row;align-items:center;gap:10px;padding:12px 16px}
-  .logo{padding:0}.logo-sub,.side-foot,.modesw,.syncbtn{display:none}
-  .nav{display:flex;overflow:auto}.nav a{border-left:none;padding:8px 12px}
-  .kpis{grid-template-columns:1fr 1fr}
+  .side{position:static;height:auto;flex-direction:row;align-items:center;gap:.625rem;padding:.75rem 1rem}
+  .logo{padding:0}.logo-sub,.side-foot,.mode,.syncbtn{display:none}
+  .nav{display:flex;overflow:auto}.nav a{border-left:none;padding:.5rem .75rem}
+  .kpis,.kpis.c6,.kpis.c4{grid-template-columns:1fr 1fr}
   .g-83,.g-2,.g-3{grid-template-columns:1fr}
 }
+
+/* ---------- ajouts applicatifs (absents du mockup, neutres en mode démo) ----------
+   - .badge-demo : signale un bloc non calculable, visible en mode réel seulement.
+   - .mode span  : le toggle démo/réel devient cliquable (le mockup était inerte). */
+.badge-demo{display:inline-block;font-size:.59375rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--warn);background:var(--warn-bg);border-radius:99px;padding:.0625rem .4375rem;margin-left:.375rem;vertical-align:middle}
+.mode span{cursor:pointer}
 </style>
 </head>
-{% macro badge(key) %}{% if mode == 'real' and key in d.demo_blocks %}<span class="badge-demo">démo</span>{% endif %}{% endmacro %}
 <body>
 <div class="shell">
 
 <aside class="side">
   <div class="logo">AURLOM</div>
-  <div class="logo-sub">Pilotage Groupe</div>
+  <div class="logo-sub">Suivi KPIs</div>
   <nav class="nav">
-    <a href="#synthese" class="on">Synthèse</a>
-    <a href="#pnl">P&amp;L</a>
-    <a href="#cash">Trésorerie</a>
-    <a href="#etudiants">Étudiants</a>
-    <a href="#previsionnel">Prévisionnel 12M</a>
+    <a data-tab="globale" class="on">Vue globale</a>
+    <a data-tab="campus">Campus</a>
+    <a data-tab="projections">Projections</a>
   </nav>
-
-  <div class="modesw">
-    <a href="/?mode=demo" class="{{ 'on' if mode == 'demo' else '' }}">demo</a>
-    <a href="/?mode=real" class="{{ 'on' if mode == 'real' else '' }}">real</a>
+  {# Toggle de mode : conserve le markup du mockup (spans), rendu cliquable. #}
+  <div class="mode">
+    <span class="{{ 'on' if mode == 'demo' else '' }}" onclick="location.href='/?mode=demo'">démo</span>
+    <span class="{{ 'on' if mode == 'real' else '' }}" onclick="location.href='/?mode=real'">réel</span>
   </div>
-  <form method="post" action="/sync"><button class="syncbtn" type="submit">↻ Synchroniser fulll</button></form>
-
+  {# display:contents -> le <form> ne crée pas de boîte : le bouton reste enfant direct de .side. #}
+  <form method="post" action="/sync" style="display:contents">
+    <button class="syncbtn" type="submit">⟳ Synchroniser</button>
+  </form>
   <div class="side-foot">
-    <span class="sync-dot"></span>Sync fulll · <b>{{ d.meta.sync_fulll }}</b><br>
-    Comptes bancaires · <b>{{ d.meta.sync_banques }}</b>
+    <span class="sync-dot"></span>Dernière synchronisation : <b>{{ d.meta.sync }}</b>
   </div>
 </aside>
 
 <main class="main">
 
 <div class="top">
-  <h1>{{ d.meta.titre }}</h1>
-  <div class="period">Exercice {{ d.meta.exercice }} · YTD <b>{{ d.meta.ytd }}</b> · mise à jour <b>{{ d.meta.maj }}</b></div>
+  <h1 id="pageTitle">{{ d.meta.titre }}</h1>
+  <div class="period">Exercice {{ d.meta.exercice }} · LTM <b>{{ d.meta.ltm }}</b> · mise à jour <b>{{ d.meta.maj }}</b></div>
 </div>
 
-{% if d.meta.real_error %}<div class="realerr">Mode real indisponible ({{ d.meta.real_error }}) — affichage des données démo. Lancez une synchronisation.</div>{% endif %}
+<!-- ================= TAB 1 : VUE GLOBALE ================= -->
+<div class="tab on" id="tab-globale">
 
-<!-- ============ KPI BAND ============ -->
-<section id="synthese">
-<div class="kpis">
+<div class="kpis c6">
   {% for k in d.kpis %}
   <div class="kpi">
     <div class="lbl">{{ k.lbl }}{% if mode == 'real' and k.demo %}<span class="badge-demo">démo</span>{% endif %}</div>
     <div class="val">{{ k.val }}{% if k.unit %} <small>{{ k.unit }}</small>{% endif %}</div>
     <div class="sub">{{ k.sub }}{% if k.chip %} <span class="chip {{ k.chip_cls }}">{{ k.chip }}</span>{% endif %}</div>
-    <svg class="spark" viewBox="0 0 64 24"><polyline points="{{ k.spark }}" fill="none" stroke="{{ k.spark_color }}" stroke-width="1.5"/></svg>
   </div>
   {% endfor %}
 </div>
 
-<div class="alerts">
-  {% for a in d.alerts %}
-  <div class="alert {{ a.cls }}"><i></i>{{ a.pre }}<b>{{ a.b }}</b>{{ a.post }}</div>
-  {% endfor %}
-  {{ badge('alerts') }}
-</div>
-</section>
-
-<!-- ============ P&L ============ -->
-<section id="pnl">
+<section>
 <div class="sec-h"><h2>Compte de résultat</h2><span class="note">{{ d.pnl_note }}</span>{{ badge('pnl') }}</div>
 <div class="grid g-83">
-  <div class="card">
-    <h3>CA mensuel — réel · budget · N-1</h3>
-    <div class="chart-wrap tall"><canvas id="chCA"></canvas></div>
+  <div style="display:flex;flex-direction:column;gap:.875rem">
+    <div class="card">
+      <h3>CA cumulé — LTM · budget</h3>
+      <div class="chart-wrap half"><canvas id="chCA"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>EBITDA cumulé — LTM · budget</h3>
+      <div class="chart-wrap half"><canvas id="chEB"></canvas></div>
+    </div>
   </div>
   <div class="card">
-    <h3>P&amp;L YTD synthétique</h3>
+    <h3>P&amp;L LTM synthétique</h3>
     <table>
       <tr><th>Poste</th><th>k€</th><th>vs N-1</th></tr>
       {% for r in d.pnl_table %}
-      <tr class="{{ r.cls }}"><td>{{ r.label }}{% if r.pct %} <span class="pct">{{ r.pct }}</span>{% endif %}</td><td>{{ r.val | fmt }}</td><td class="{{ r.delta_cls }}">{{ r.delta }}</td></tr>
+      <tr class="{{ r.cls }}">
+        <td>{{ r.label }}{% if r.pct %} <span class="pct">{{ r.pct }}</span>{% endif %}</td>
+        <td>{{ r.val | fmt }}</td>
+        <td class="{{ r.delta_cls }}">{{ r.delta }}</td>
+      </tr>
       {% endfor %}
     </table>
   </div>
 </div>
 </section>
 
-<!-- ============ CASH ============ -->
-<section id="cash">
+<section>
 <div class="sec-h"><h2>Trésorerie</h2><span class="note">position consolidée · prévision 13 semaines</span>{{ badge('cash') }}</div>
 <div class="grid g-83">
   <div class="card">
     <h3>Solde de trésorerie — réalisé &amp; projeté (13 sem.)</h3>
     <div class="chart-wrap tall"><canvas id="chCash"></canvas></div>
   </div>
-  <div style="display:flex;flex-direction:column;gap:14px">
+  <div style="display:flex;flex-direction:column;gap:.875rem">
     <div class="card">
-      <h3>Covenants LBO</h3>
+      <h3>Covenants LBO{{ badge('covenants') }}</h3>
       <div class="cov">
         {% for c in d.covenants %}
         <div class="cov-item">
-          <div class="cov-top">
-            <span class="nm">{{ c.name }}</span>
-            <span class="vl"><span class="dot {{ c.status }}"></span>{{ c.value }}</span>
-          </div>
-          <div class="cov-sub">{{ c.rule }}</div>
+          <div class="cn">{{ c.name }}<small>{{ c.rule }}</small></div>
+          <div class="cv"><span class="dot {{ c.status }}"></span>{{ c.value }}</div>
         </div>
         {% endfor %}
       </div>
     </div>
     <div class="card">
       <h3>Prochaines échéances LBO</h3>
-      <table class="echeances">
+      <table>
         {% for e in d.echeances %}
-        <tr><td>{{ e.label }}</td><td>{{ e.date }}</td><td>{% if e.amount %}<b>{{ e.amount }}</b>{% else %}<span class="doc">doc</span>{% endif %}</td></tr>
+        <tr>
+          <td>{{ e.label }}</td>
+          <td>{{ e.date }}</td>
+          <td>{% if e.doc %}<span class="doc">doc</span>{% else %}<b>{{ e.amount }}</b>{% endif %}</td>
+        </tr>
         {% endfor %}
       </table>
     </div>
@@ -252,12 +259,15 @@ footer{font-size:11px;color:var(--muted);border-top:1px solid var(--line);paddin
 </div>
 </section>
 
-<!-- ============ ÉTUDIANTS ============ -->
-<section id="etudiants">
-<div class="sec-h"><h2>Étudiants &amp; campus</h2><span class="note">rentrée 2026 en cours de constitution</span>{{ badge('etudiants') }}</div>
+<section>
+<div class="sec-h"><h2>Étudiants — groupe</h2><span class="note">rentrée 2026 en cours de constitution</span>{{ badge('etudiants') }}</div>
 <div class="grid g-3">
   <div class="card">
     <h3>Inscriptions cumulées — rentrée 2026 vs 2025</h3>
+    <div class="hleg">
+      <span><i style="background:{{ d.charts.inscr.color_2026 }}"></i>{{ d.charts.inscr.leg_2026 }}</span>
+      <span><i style="background:{{ d.charts.inscr.color_2025 }}"></i>{{ d.charts.inscr.leg_2025 }}</span>
+    </div>
     <div class="chart-wrap short"><canvas id="chInscr"></canvas></div>
   </div>
   <div class="card">
@@ -267,159 +277,333 @@ footer{font-size:11px;color:var(--muted);border-top:1px solid var(--line);paddin
   <div class="card">
     <h3>Acquisition</h3>
     <table>
-      <tr><th>Indicateur</th><th>YTD</th><th>N-1</th></tr>
+      <tr><th>Indicateur</th><th>LTM</th><th>N-1</th></tr>
       {% for a in d.acquisition %}
-      <tr><td>{{ a.label }}</td><td>{{ a.ytd }}</td><td class="{{ a.n1_cls }}">{{ a.n1 }}</td></tr>
+      <tr><td>{{ a.label }}</td><td>{{ a.ltm }}</td><td class="{{ a.n1_cls }}">{{ a.n1 }}</td></tr>
       {% endfor %}
     </table>
   </div>
 </div>
-<div class="card" style="margin-top:14px">
-  <h3>Performance par campus</h3>
-  <table>
-    <tr><th>Campus</th><th>Étudiants</th><th>Capacité</th><th>Remplissage</th><th>CA YTD k€</th><th>EBITDA k€</th><th>Marge</th></tr>
-    {% for c in d.campus %}
-    <tr><td>{{ c.nom }}</td><td>{{ c.etu }}</td><td>{{ c.cap }}</td><td><span class="fill"><span class="bar"><i style="width:{{ c.fill }}%"></i></span>{{ c.fill }} %</span></td><td>{{ c.ca }}</td><td>{{ c.ebitda }}</td><td>{{ c.marge }}</td></tr>
-    {% endfor %}
-  </table>
-</div>
 </section>
+</div>
 
-<!-- ============ PRÉVISIONNEL ============ -->
-<section id="previsionnel">
+<!-- ================= TAB 2 : CAMPUS ================= -->
+<div class="tab" id="tab-campus">
+
+{# Sélecteur de campus : « Tous » + un bouton par campus. #}
+<div class="camp-sel" id="campSel">
+  <button class="on" data-c="all">Tous</button>
+  {% for c in d.campus %}<button data-c="{{ c.key }}">{{ c.court }}</button>{% endfor %}
+</div>
+
+<div id="campAll">
+  <section>
+  <div class="sec-h"><h2>Comparatif campus</h2><span class="note">LTM · k€</span>{{ badge('campus') }}</div>
+  <div class="card" style="margin-bottom:.875rem">
+    <h3>CA &amp; EBITDA par campus</h3>
+    <div class="chart-wrap"><canvas id="chCampComp"></canvas></div>
+  </div>
+  <div class="grid g-2">
+    <div class="card">
+      <h3>Effectifs par campus</h3>
+      <table id="tblCampEff">
+        <tr><th>Campus</th><th>Capacité</th><th>Étudiants</th><th>Remplissage</th><th>Alternants</th><th>% alternance</th></tr>
+        {% for c in d.campus %}
+        <tr>
+          <td>{{ c.nom }}</td>
+          <td>{{ c.cap | fmt }}</td>
+          <td>{{ c.et | fmt }}</td>
+          <td><span class="fill"><span class="bar"><i style="width:{{ c.fill }}%"></i></span>{{ c.fill }} %</span></td>
+          <td>{{ c.alternants | fmt }}</td>
+          <td>{{ c.alt }} %</td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+    <div class="card">
+      <h3>P&amp;L par campus</h3>
+      <table id="tblCampPnl">
+        <tr><th>Campus</th><th>CA LTM k€</th><th>EBITDA k€</th><th>Marge</th></tr>
+        {% for c in d.campus %}
+        <tr><td>{{ c.nom }}</td><td>{{ c.ca | fmt }}</td><td>{{ c.eb | fmt }}</td><td>{{ c.marge }}</td></tr>
+        {% endfor %}
+      </table>
+    </div>
+  </div>
+  </section>
+</div>
+
+{# Vue détail d'un campus : remplie en JS depuis le JSON CAMPUS. #}
+<div id="campDetail" style="display:none">
+  <div class="kpis c4" id="campKpis"></div>
+  <section style="margin-top:1.375rem">
+  <div class="grid g-2">
+    <div class="card">
+      <h3>CA mensuel du campus (k€)</h3>
+      <div class="chart-wrap"><canvas id="chCampCA"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Étudiants par filière</h3>
+      <div class="chart-wrap"><canvas id="chCampFil"></canvas></div>
+    </div>
+  </div>
+  </section>
+  <section>
+  <div class="grid g-2">
+    <div class="card">
+      <h3>Indicateurs pédagogiques &amp; opérationnels</h3>
+      <table id="tblCampPedago"></table>
+    </div>
+    <div class="card">
+      <h3>P&amp;L LTM du campus</h3>
+      <table id="tblCampPnlDetail"></table>
+    </div>
+  </div>
+  </section>
+</div>
+</div>
+
+<!-- ================= TAB 3 : PROJECTIONS ================= -->
+<div class="tab" id="tab-projections">
+
+<section style="margin-top:1.375rem">
 <div class="sec-h">
-  <h2>Prévisionnel 12 mois glissant</h2><span class="note">juil. 2026 → juin 2027</span>{{ badge('previsionnel') }}
+  <h2>Prévisionnel 12 mois glissant</h2><span class="note">{{ d.projections.labels[0] }} → {{ d.projections.labels[-1] }}</span>{{ badge('previsionnel') }}
   <div class="scen">
-    <button class="on" data-s="base">Base</button>
-    <button data-s="low">Rentrée −10 %</button>
-    <button data-s="high">Rentrée +10 %</button>
+    {% for s in d.projections.scenarios %}<button class="{{ 'on' if loop.first else '' }}" data-s="{{ s.key }}">{{ s.label }}</button>{% endfor %}
   </div>
 </div>
 <div class="grid g-2">
   <div class="card">
-    <h3>P&amp;L — CA &amp; EBITDA mensuels (k€)</h3>
-    <div class="chart-wrap"><canvas id="chFcstPL"></canvas></div>
+    <h3>CA &amp; EBITDA mensuels (k€) — cumul en infobulle</h3>
+    <div class="chart-wrap half"><canvas id="chFcstCA"></canvas></div>
+    <div class="chart-wrap half" style="margin-top:.375rem"><canvas id="chFcstEB"></canvas></div>
   </div>
   <div class="card">
     <h3>Trésorerie projetée (M€)</h3>
-    <div class="chart-wrap"><canvas id="chFcstCash"></canvas></div>
+    <div class="chart-wrap" style="height:24.25rem"><canvas id="chFcstCash"></canvas></div>
   </div>
 </div>
 </section>
 
-<footer>{{ d.meta.footer }}</footer>
+<section>
+<div class="grid g-2">
+  <div class="card">
+    <h3>Hypothèses du scénario</h3>
+    <div class="hyp" id="hypBox"></div>
+  </div>
+  <div class="card">
+    <h3>Points clés du prévisionnel de trésorerie</h3>
+    <div class="pts">
+      {% for p in d.points_cles %}
+      <div><span class="num">{{ loop.index }}</span>{{ p | safe }}</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+</section>
+</div>
+
+{% if d.meta.footer %}<footer>{{ d.meta.footer }}{% if d.meta.real_error %} · erreur mode réel : {{ d.meta.real_error }}{% endif %}</footer>{% endif %}
 
 </main>
 </div>
 
 <script>
-const D = {{ d.charts | tojson }};
 const V='#5B2D8E', VS='#C9B8E4', GRAY='#C6C1D2', INK='#1B1524';
+
+/* ---- données injectées depuis get_dashboard_data() : aucun chiffre en dur ---- */
+const D = {{ d.charts | tojson }};
+const CAMPUS = {{ d.campus | tojson }};
+const CAMPUS_FIL_COLORS = {{ d.campus_fil_colors | tojson }};
+const PROJ = {{ d.projections | tojson }};
+
+/* ---- échelle : les polices Chart.js suivent la taille racine ---- */
+const rootFs=()=>parseFloat(getComputedStyle(document.documentElement).fontSize);
 Chart.defaults.font.family='Inter';
-Chart.defaults.font.size=10.5;
+Chart.defaults.font.size=rootFs()*0.66;
 Chart.defaults.color='#6E6880';
 const grid={color:'#F0EDF5'}, noGrid={display:false};
+const fmt=v=>{if(v===0||v===null||v===undefined)return'-';const a=Math.abs(Math.round(v)).toLocaleString('fr-FR');return v<0?`(${a})`:a};
+const pctf=v=>(v*100).toFixed(1).replace('.',',')+' %';
+const legend={position:'top',align:'end',labels:{boxWidth:8,boxHeight:8,usePointStyle:true}};
+const xflat={minRotation:0,maxRotation:0,font:{size:rootFs()*0.53}};
 
-/* Helper de format unique — mêmes règles que le fmt() Python :
-   négatifs entre parenthèses, zéro '-', espace milliers, virgule décimale. */
-function fmt(x, dec){
- if(x===null || x===undefined || x===0) return '-';
- dec = dec || 0;
- const neg = x < 0;
- const s = Math.abs(x).toLocaleString('fr-FR',{minimumFractionDigits:dec,maximumFractionDigits:dec});
- return neg ? '('+s+')' : s;
+function applyChartScale(){
+ const b=rootFs();
+ Chart.defaults.font.size=b*0.66;
+ xflat.font.size=b*0.53;
+ Object.values(Chart.instances).forEach(c=>c.update('none'));
 }
+window.addEventListener('resize',(()=>{let t;return()=>{clearTimeout(t);t=setTimeout(applyChartScale,200)}})());
 
-/* Datalabels désactivés par défaut (activés au cas par cas). */
-if(window.ChartDataLabels){ Chart.defaults.set('plugins.datalabels', {display:false}); }
-
-/* Tooltips : valeur formatée via fmt() (2 décimales sous 100, ex. M€). */
-Chart.defaults.plugins.tooltip.callbacks={label:function(c){
- const iy = c.chart.options.indexAxis === 'y';
- const v = iy ? c.parsed.x : c.parsed.y;
- const dec = (v!==null && Math.abs(v) < 100) ? 2 : 0;
- return (c.dataset.label ? c.dataset.label+' : ' : '') + fmt(v, dec);
+/* plugin : variation en € centrée entre les deux barres, flèche à double pointe reliant les deux extrémités */
+const gapPlugin={id:'gap',afterDatasetsDraw(ch,args,opts){
+ if(!opts||!opts.text)return;
+ const a=ch.getDatasetMeta(opts.a[0]).data[opts.a[1]], b=ch.getDatasetMeta(opts.b[0]).data[opts.b[1]];
+ if(!a||!b)return;
+ const ctx=ch.ctx, f=rootFs();
+ const y=Math.min(a.y,b.y)-f*0.7, x1=a.x, x2=b.x, ah=f*0.32;
+ ctx.save();ctx.strokeStyle=INK;ctx.fillStyle=INK;ctx.lineWidth=1;
+ ctx.beginPath();ctx.moveTo(x1+ah,y);ctx.lineTo(x2-ah,y);ctx.stroke();
+ ctx.beginPath();ctx.moveTo(x1,y);ctx.lineTo(x1+ah,y-ah*.7);ctx.lineTo(x1+ah,y+ah*.7);ctx.closePath();ctx.fill();
+ ctx.beginPath();ctx.moveTo(x2,y);ctx.lineTo(x2-ah,y-ah*.7);ctx.lineTo(x2-ah,y+ah*.7);ctx.closePath();ctx.fill();
+ ctx.font=`600 ${f*0.66}px Inter`;ctx.textAlign='center';
+ ctx.fillText(opts.text,(x1+x2)/2,y-f*0.4);
+ ctx.restore();
+}};
+/* plugin : numéros cerclés sur points du graphe cash (taille suit la racine) */
+const numPlugin={id:'nums',afterDatasetsDraw(ch,args,opts){
+ if(!opts||!opts.pts)return;
+ const meta=ch.getDatasetMeta(0), ctx=ch.ctx, b=rootFs();
+ opts.pts.forEach(p=>{const el=meta.data[p.i];if(!el)return;
+  const x=el.x, y=el.y+b*0.94, r=b*0.44;
+  ctx.save();ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fillStyle=V;ctx.fill();
+  ctx.font=`600 ${b*0.56}px Inter`;ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(p.n,x,y);ctx.restore();});
 }};
 
-/* Plugin : fine ligne verticale grise après la catégorie d'index `after`
-   (sépare les mois de la zone des totaux). */
-function vSep(after){return{id:'vsep_'+after,afterDatasetsDraw(chart){
- const xs=chart.scales.x; if(!xs) return;
- const x=(xs.getPixelForValue(after)+xs.getPixelForValue(after+1))/2;
- const a=chart.chartArea, g=chart.ctx;
- g.save();g.strokeStyle='#D9D4E4';g.lineWidth=1;
- g.beginPath();g.moveTo(x,a.top);g.lineTo(x,a.bottom);g.stroke();g.restore();
-}};}
+/* ---------- TABS ---------- */
+const titles={globale:'Vue globale',campus:'Campus',projections:'Projections'};
+document.querySelectorAll('.nav a').forEach(a=>a.onclick=()=>{
+  document.querySelectorAll('.nav a').forEach(x=>x.classList.remove('on'));
+  a.classList.add('on');
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  document.getElementById('tab-'+a.dataset.tab).classList.add('on');
+  document.getElementById('pageTitle').textContent=titles[a.dataset.tab];
+});
 
-/* CA mensuel — réel · budget, axe Y visible.
-   + 2 barres de totaux (YTD N violet, Budget N gris clair) avec datalabels M€.
-   Datalabels affichés UNIQUEMENT sur les 2 totaux (jamais de "-" sur les mois). */
-new Chart(chCA,{data:{labels:[...D.pnl.labels,'YTD N','Budget N'],datasets:[
- {type:'bar',label:'Réel',data:[...D.pnl.reel,null,null],backgroundColor:V,borderRadius:3,barPercentage:.75,datalabels:{display:false}},
- {type:'line',label:'Budget',data:[...D.pnl.budget,null,null],borderColor:INK,borderDash:[4,3],borderWidth:1.5,pointRadius:0,datalabels:{display:false}},
- {type:'bar',label:'Totaux',yAxisID:'yTot',data:[...Array(D.pnl.labels.length).fill(null),D.pnl.total_n,D.pnl.total_budget],
-  backgroundColor:c=>c.dataIndex===D.pnl.labels.length?V:GRAY,borderRadius:3,barPercentage:.75,
-  datalabels:{display:c=>c.dataset.data[c.dataIndex]!=null,anchor:'end',align:'top',offset:2,color:INK,font:{size:10,weight:600},formatter:v=>(v/1000).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})}}
-]},plugins:[ChartDataLabels,vSep(D.pnl.labels.length-1)],options:{maintainAspectRatio:false,layout:{padding:{top:14}},plugins:{legend:{position:'top',align:'end',labels:{boxWidth:8,boxHeight:8,usePointStyle:true},filter:i=>i.text!=='Totaux'}},scales:{x:{grid:noGrid,ticks:{minRotation:0,maxRotation:0,font:{size:9.5}}},y:{grace:'8%',grid:grid,ticks:{callback:v=>v/1000+' M€'}},yTot:{display:false,min:0,grace:'12%'}}}});
+/* ---------- VUE GLOBALE ---------- */
+const L12=D.l12;
+const caM=D.ca_m, ebM=D.eb_m;
+const cum=a=>{let s=0;return a.map(v=>s+=v)};
+const caC=cum(caM), ebC=cum(ebM);
+const N=L12.length;
 
-/* Cash 13 sem */
+new Chart(chCA,{type:'bar',data:{labels:[...L12,D.budget_label],datasets:[
+ {label:D.leg_reel,data:[...caC,null],backgroundColor:V,borderRadius:3,barPercentage:.72},
+ {label:D.leg_budget,data:[...Array(N).fill(null),D.budget_ca],backgroundColor:GRAY,borderRadius:3,barPercentage:.72}
+]},options:{maintainAspectRatio:false,
+ plugins:{legend:legend,gap:{a:[0,N-1],b:[1,N],text:D.gap_ca},
+  tooltip:{callbacks:{label:c=>c.dataset.label+' : '+fmt(c.raw)+' k€'}}},
+ scales:{x:{grid:noGrid,ticks:xflat},y:{grid:grid,grace:'14%',ticks:{callback:v=>v/1000+' M€'}}}},
+ plugins:[gapPlugin]});
+
+new Chart(chEB,{type:'bar',data:{labels:[...L12,D.budget_label],datasets:[
+ {label:D.leg_reel,data:[...ebC,null],backgroundColor:V,borderRadius:3,barPercentage:.72},
+ {label:D.leg_budget,data:[...Array(N).fill(null),D.budget_eb],backgroundColor:GRAY,borderRadius:3,barPercentage:.72}
+]},options:{maintainAspectRatio:false,
+ plugins:{legend:legend,gap:{a:[0,N-1],b:[1,N],text:D.gap_eb},
+  tooltip:{callbacks:{label:c=>c.dataset.label+' : '+fmt(c.raw)+' k€'}}},
+ scales:{x:{grid:noGrid,ticks:xflat},y:{grid:grid,grace:'14%',ticks:{callback:v=>fmt(v)}}}},
+ plugins:[gapPlugin]});
+
 new Chart(chCash,{type:'line',data:{labels:D.cash.labels,datasets:[
- {label:'Réalisé',data:D.cash.realise,borderColor:V,borderWidth:2,pointRadius:0,fill:{target:'origin'},backgroundColor:'rgba(91,45,142,.06)'},
- {label:'Projeté',data:D.cash.projete,borderColor:V,borderDash:[5,4],borderWidth:2,pointRadius:0},
- {label:'Seuil covenant 1,0 M€',data:D.cash.seuil,borderColor:'#B42318',borderWidth:1,borderDash:[2,3],pointRadius:0}
-]},options:{maintainAspectRatio:false,plugins:{legend:{position:'top',align:'end',labels:{boxWidth:8,boxHeight:8,usePointStyle:true}}},scales:{x:{grid:noGrid},y:{min:0,grid:grid,ticks:{callback:v=>v.toFixed(1)+' M€'}}}}});
+ {label:D.cash.leg_realise,data:D.cash.realise,borderColor:V,borderWidth:2,pointRadius:0,fill:{target:'origin'},backgroundColor:'rgba(91,45,142,.06)'},
+ {label:D.cash.leg_projete,data:D.cash.projete,borderColor:V,borderDash:[5,4],borderWidth:2,pointRadius:0},
+ {label:D.cash.seuil_label,data:D.cash.seuil,borderColor:'#B42318',borderWidth:1,borderDash:[2,3],pointRadius:0}
+]},options:{maintainAspectRatio:false,plugins:{legend:legend},scales:{x:{grid:noGrid,ticks:xflat},y:{min:0,grid:grid,ticks:{callback:v=>v.toFixed(1)+' M€'}}}}});
 
-/* Inscriptions cumulées */
 new Chart(chInscr,{type:'line',data:{labels:D.inscr.labels,datasets:[
- {label:'2026',data:D.inscr.d2026,borderColor:V,borderWidth:2,pointRadius:0},
- {label:'2025',data:D.inscr.d2025,borderColor:GRAY,borderWidth:1.5,pointRadius:0}
-]},options:{maintainAspectRatio:false,plugins:{legend:{position:'top',align:'end',labels:{boxWidth:8,boxHeight:8,usePointStyle:true}}},scales:{x:{grid:noGrid},y:{grid:grid}}}});
+ {label:D.inscr.leg_2026,data:D.inscr.d2026,borderColor:V,borderWidth:2,pointRadius:0},
+ {label:D.inscr.leg_2025,data:D.inscr.d2025,borderColor:GRAY,borderWidth:1.5,pointRadius:0}
+]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:noGrid,ticks:xflat},y:{grid:grid}}}});
 
-/* Filières */
 new Chart(chFil,{type:'bar',data:{labels:D.fil.labels,datasets:[{data:D.fil.data,backgroundColor:D.fil.colors,borderRadius:3,barPercentage:.65}]},options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:grid},y:{grid:noGrid}}}});
 
-/* Prévisionnel 12M */
-const F=D.scen.labels;
-const scen=D.scen;
-const sum=a=>a.reduce((x,y)=>x+(y||0),0);
-const N=F.length;                       // 12 mois
-const nulls=n=>Array(n).fill(null);
-/* Prépare les 4 séries du P&L pour un scénario : mensuels + colonne Total 12M. */
-function plData(s){return{
- ca:[...s.ca,null], eb:[...s.eb,null],
- caT:[...nulls(N),sum(s.ca)], ebT:[...nulls(N),sum(s.eb)]
-};}
-let pd=plData(scen.base);
-const chPL=new Chart(chFcstPL,{data:{labels:[...F,'Total 12M'],datasets:[
- {type:'bar',label:'CA',data:pd.ca,backgroundColor:VS,borderRadius:3,barPercentage:.55,datalabels:{display:false}},
- {type:'line',label:'EBITDA',data:pd.eb,borderColor:V,borderWidth:2,pointRadius:0,datalabels:{display:false}},
- {type:'bar',label:'CA total',yAxisID:'yTot',data:pd.caT,backgroundColor:V,borderRadius:3,barPercentage:.55,
-  datalabels:{display:true,anchor:'end',align:'top',offset:2,color:INK,font:{size:10,weight:600},formatter:v=>fmt(v)}},
- {type:'line',label:'EBITDA total',yAxisID:'yTot',data:pd.ebT,borderColor:V,showLine:false,pointRadius:4,pointBackgroundColor:V,
-  datalabels:{display:true,anchor:'end',align:'top',offset:4,color:V,font:{size:10,weight:600},formatter:v=>fmt(v)}}
-]},plugins:[ChartDataLabels,vSep(N-1)],options:{maintainAspectRatio:false,layout:{padding:{top:14}},plugins:{legend:{position:'top',align:'end',labels:{boxWidth:8,boxHeight:8,usePointStyle:true},filter:i=>i.text.indexOf('total')<0}},scales:{x:{grid:noGrid},y:{grace:'8%',grid:grid},yTot:{display:false,min:0,grace:'12%'}}}});
+/* ---------- CAMPUS ---------- */
+/* CAMPUS est une LISTE (ordre d'affichage garanti) ; index par clé pour le détail. */
+const BY_KEY=Object.fromEntries(CAMPUS.map(c=>[c.key,c]));
+new Chart(chCampComp,{data:{labels:CAMPUS.map(c=>[c.court,'('+c.et+' étudiants)']),datasets:[
+ {type:'bar',label:'CA (k€)',data:CAMPUS.map(c=>c.ca),backgroundColor:VS,borderRadius:3,barPercentage:.6},
+ {type:'bar',label:'EBITDA (k€)',data:CAMPUS.map(c=>c.eb),backgroundColor:V,borderRadius:3,barPercentage:.6}
+]},options:{maintainAspectRatio:false,plugins:{legend:legend,tooltip:{callbacks:{label:c=>c.dataset.label+' : '+fmt(c.raw)}}},scales:{x:{grid:noGrid},y:{grid:grid}}}});
+
+/* Rend un tableau de P&L (lignes pré-calculées côté serveur). */
+function renderPnl(rows){
+ return '<tr><th>Poste</th><th>k€</th></tr>'+rows.map(r=>
+  `<tr class="${r.cls}"><td>${r.label}${r.pct?` <span class="pct">${r.pct}</span>`:''}</td><td>${fmt(r.val)}</td></tr>`).join('');
+}
+
+let chCampCAInst=null,chCampFilInst=null;
+function showCampus(key){
+ const all=document.getElementById('campAll'),det=document.getElementById('campDetail');
+ if(key==='all'){all.style.display='';det.style.display='none';return}
+ all.style.display='none';det.style.display='';
+ const c=BY_KEY[key];
+ document.getElementById('campKpis').innerHTML=`
+  <div class="kpi"><div class="lbl">Étudiants</div><div class="val">${fmt(c.et)}</div><div class="sub">${c.adr}</div></div>
+  <div class="kpi"><div class="lbl">Remplissage</div><div class="val">${c.fill} <small>%</small></div><div class="sub">capacité ${fmt(c.cap)}</div></div>
+  <div class="kpi"><div class="lbl">CA LTM</div><div class="val">${(c.ca/1000).toFixed(2).replace('.',',')} <small>M€</small></div><div class="sub">${fmt(Math.round(c.ca/c.et*1000))} € / étudiant</div></div>
+  <div class="kpi"><div class="lbl">EBITDA LTM</div><div class="val">${fmt(c.eb)} <small>k€</small></div><div class="sub">marge ${c.marge}</div></div>
+  <div class="kpi"><div class="lbl">Alternance</div><div class="val">${c.alt} <small>%</small></div><div class="sub">des effectifs</div></div>
+  <div class="kpi"><div class="lbl">Réussite BTS</div><div class="val">${c.reu} <small>%</small></div><div class="sub">session 2025</div></div>
+  <div class="kpi"><div class="lbl">Coût moyen / prof</div><div class="val">${c.prof} <small>k€</small></div><div class="sub">chargé, annuel</div></div>
+  <div class="kpi"><div class="lbl">Loyer annuel</div><div class="val">${fmt(c.loyer)} <small>k€</small></div><div class="sub">${fmt(c.m2)} m²</div></div>`;
+ document.getElementById('tblCampPedago').innerHTML=`
+  <tr><th>Indicateur</th><th>Valeur</th></tr>
+  <tr><td>Effectif moyen / classe</td><td>${c.classe}</td></tr>
+  <tr><td>Taux de réussite BTS</td><td>${c.reu} %</td></tr>
+  <tr><td>Attrition en cours d'année</td><td>${String(c.att).replace('.',',')} %</td></tr>
+  <tr><td>Satisfaction étudiants (NPS)</td><td>${c.nps}</td></tr>
+  <tr><td>Part alternance</td><td>${c.alt} %</td></tr>`;
+ document.getElementById('tblCampPnlDetail').innerHTML=renderPnl(c.pnl);
+ if(chCampCAInst)chCampCAInst.destroy();
+ chCampCAInst=new Chart(chCampCA,{type:'bar',data:{labels:L12,datasets:[{data:c.ca_m,backgroundColor:V,borderRadius:3,barPercentage:.7}]},
+  options:{maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:x=>fmt(x.raw)+' k€'}}},scales:{x:{grid:noGrid,ticks:xflat},y:{grid:grid}}}});
+ if(chCampFilInst)chCampFilInst.destroy();
+ chCampFilInst=new Chart(chCampFil,{type:'bar',data:{labels:c.fil_labels,datasets:[{data:c.fil_data,backgroundColor:CAMPUS_FIL_COLORS,borderRadius:3,barPercentage:.65}]},
+  options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:grid},y:{grid:noGrid}}}});
+}
+const sel=document.getElementById('campSel');
+sel.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+ sel.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+ b.classList.add('on');showCampus(b.dataset.c);
+});
+
+/* ---------- PROJECTIONS ---------- */
+const F=PROJ.labels;
+const scen=PROJ.scen;
+const DEF=PROJ.scenarios[0].key;
+let cur={ca:scen[DEF].ca,eb:scen[DEF].eb,caC:cum(scen[DEF].ca),ebC:cum(scen[DEF].eb)};
+
+const chFCA=new Chart(chFcstCA,{type:'bar',data:{labels:F,datasets:[
+ {label:PROJ.leg_ca,data:cur.ca,backgroundColor:VS,borderRadius:3,barPercentage:.62}
+]},options:{maintainAspectRatio:false,
+ plugins:{legend:legend,tooltip:{callbacks:{label:c=>[PROJ.leg_ca+' : '+fmt(c.raw)+' k€','Cumul : '+fmt(cur.caC[c.dataIndex])+' k€']}}},
+ scales:{x:{grid:noGrid,ticks:{display:false}},y:{grid:grid,ticks:{callback:v=>fmt(v)}}}}});
+
+const chFEB=new Chart(chFcstEB,{type:'bar',data:{labels:F,datasets:[
+ {label:PROJ.leg_eb,data:cur.eb,backgroundColor:V,borderRadius:3,barPercentage:.62}
+]},options:{maintainAspectRatio:false,
+ plugins:{legend:legend,tooltip:{callbacks:{label:c=>{const i=c.dataIndex;
+  return [PROJ.leg_eb+' : '+fmt(c.raw)+' k€','Taux du mois : '+pctf(c.raw/cur.ca[i]),'Cumul : '+fmt(cur.ebC[i])+' k€ · '+pctf(cur.ebC[i]/cur.caC[i])];}}}},
+ scales:{x:{grid:noGrid,ticks:xflat},y:{grid:grid,ticks:{callback:v=>fmt(v)}}}}});
+
 const chC=new Chart(chFcstCash,{type:'line',data:{labels:F,datasets:[
- {label:'Trésorerie',data:scen.base.cash,borderColor:V,borderWidth:2,pointRadius:0,fill:{target:'origin'},backgroundColor:'rgba(91,45,142,.06)'},
- {label:'Seuil 1,0 M€',data:scen.seuil,borderColor:'#B42318',borderWidth:1,borderDash:[2,3],pointRadius:0}
-]},options:{maintainAspectRatio:false,plugins:{legend:{position:'top',align:'end',labels:{boxWidth:8,boxHeight:8,usePointStyle:true}}},scales:{x:{grid:noGrid},y:{grid:grid,ticks:{callback:v=>v.toFixed(1)+' M€'}}}}});
+ {label:PROJ.leg_cash,data:scen[DEF].cash,borderColor:V,borderWidth:2,pointRadius:0,fill:{target:'origin'},backgroundColor:'rgba(91,45,142,.06)'},
+ {label:PROJ.seuil_label,data:PROJ.seuil,borderColor:'#B42318',borderWidth:1,borderDash:[2,3],pointRadius:0}
+]},options:{maintainAspectRatio:false,
+ plugins:{legend:legend,nums:{pts:PROJ.cash_pts}},
+ scales:{x:{grid:noGrid,ticks:xflat},y:{min:0,grid:grid,ticks:{callback:v=>v.toFixed(1)+' M€'}}}},
+ plugins:[numPlugin]});
+
+const hypBox=document.getElementById('hypBox');
+const renderHyp=h=>hypBox.innerHTML=h.map(x=>'• '+x).join('<br>');
+renderHyp(scen[DEF].hyp);
 
 document.querySelectorAll('.scen button').forEach(b=>b.onclick=()=>{
  document.querySelectorAll('.scen button').forEach(x=>x.classList.remove('on'));
  b.classList.add('on');
  const s=scen[b.dataset.s];
- const p=plData(s);
- chPL.data.datasets[0].data=p.ca;chPL.data.datasets[1].data=p.eb;
- chPL.data.datasets[2].data=p.caT;chPL.data.datasets[3].data=p.ebT;chPL.update();
+ cur={ca:s.ca,eb:s.eb,caC:cum(s.ca),ebC:cum(s.eb)};
+ chFCA.data.datasets[0].data=s.ca;chFCA.update();
+ chFEB.data.datasets[0].data=s.eb;chFEB.update();
  chC.data.datasets[0].data=s.cash;chC.update();
+ renderHyp(s.hyp);
 });
 
-/* nav active on scroll */
-const links=[...document.querySelectorAll('.nav a')];
-const secs=links.map(a=>document.querySelector(a.getAttribute('href')));
-addEventListener('scroll',()=>{
- let i=secs.findLastIndex(s=>s.getBoundingClientRect().top<120);
- links.forEach((a,k)=>a.classList.toggle('on',k===Math.max(0,i)));
-},{passive:true});
+applyChartScale();
 </script>
 </body>
 </html>
