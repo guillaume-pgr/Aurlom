@@ -15,9 +15,10 @@ Un middleware global protège toutes les routes par cookie de session, sauf
 from __future__ import annotations
 
 import hmac
+import secrets
 from datetime import datetime, timedelta
 
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.concurrency import run_in_threadpool
@@ -26,8 +27,13 @@ from starlette.middleware.sessions import SessionMiddleware
 import auth
 import config
 import db
+import excel_source
+import excel_store
 from datasource import get_dashboard_data
 from sync import run_sync
+
+# Taille maximale acceptée pour un upload Excel (garde-fou mémoire).
+_MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 Mo
 
 app = FastAPI(title="Dashboard direction Aurlom")
 
@@ -216,6 +222,127 @@ async def api_sync(request: Request):
     result = await run_in_threadpool(run_sync)
     status = 200 if result.get("status") == "ok" else 500
     return JSONResponse(result, status_code=status)
+
+
+# --- Administration : import du fichier Excel (source du mode réel) ----
+@app.get("/admin/upload", response_class=HTMLResponse)
+def admin_upload_form(request: Request):
+    """Page d'import : drag & drop du classeur + historique des imports."""
+    info = _safe(excel_store.active_info)
+    hist = _safe(excel_store.history, default=[]) or []
+    return templates.TemplateResponse(
+        request, "admin_upload.html",
+        {"active": info, "history": hist, "staged": None, "error": None, "message": None},
+    )
+
+
+@app.post("/admin/upload", response_class=HTMLResponse)
+async def admin_upload(request: Request, fichier: UploadFile = File(...)):
+    """Étape 1 : upload -> validation -> diff -> écran de confirmation.
+
+    On ne touche PAS aux données en place : le fichier validé est mis en attente
+    (table import_staging) et l'utilisateur doit confirmer pour l'activer.
+    """
+    content = await fichier.read()
+    if not content:
+        return _admin_error(request, "Fichier vide.")
+    if len(content) > _MAX_UPLOAD_BYTES:
+        return _admin_error(request, "Fichier trop volumineux (max 10 Mo).")
+
+    # Parsing + validation stricte (hors boucle asyncio : openpyxl est bloquant).
+    try:
+        dashboard, tables = await run_in_threadpool(
+            excel_source.parse_and_validate, content)
+    except excel_source.ExcelValidationError as exc:
+        return _admin_error(request, "Le fichier comporte des erreurs :",
+                            details=exc.errors)
+    except Exception as exc:  # noqa: BLE001
+        return _admin_error(request, f"Erreur inattendue : {type(exc).__name__} — {exc}")
+
+    # Mise en attente + calcul du diff vs version active.
+    token = secrets.token_urlsafe(24)
+    diff = _safe(excel_store.compute_diff, dashboard, default={}) or {}
+    volum = excel_source.volumetrie(tables)
+    try:
+        excel_store.stage_import(
+            dashboard, token=token, filename=fichier.filename or "import.xlsx",
+            file_hash=excel_source.file_hash(content), volumetrie=volum, diff=diff)
+    except Exception as exc:  # noqa: BLE001
+        return _admin_error(request, f"Base indisponible : {type(exc).__name__} — {exc}")
+
+    return templates.TemplateResponse(
+        request, "admin_upload.html",
+        {"active": _safe(excel_store.active_info),
+         "history": _safe(excel_store.history, default=[]) or [],
+         "staged": {"token": token, "filename": fichier.filename,
+                    "diff": diff, "volumetrie": volum},
+         "error": None, "message": None},
+    )
+
+
+@app.post("/admin/confirm", response_class=HTMLResponse)
+def admin_confirm(request: Request, token: str = Form(...)):
+    """Étape 2 : l'utilisateur confirme -> activation (transactionnelle)."""
+    staged = _safe(excel_store.get_staged, token)
+    if not staged:
+        return _admin_error(request, "Import expiré ou introuvable. Recommencez.")
+    try:
+        excel_store.save_import(
+            staged["dashboard"], filename=staged["filename"],
+            file_hash=staged["file_hash"], volumetrie=staged["volumetrie"],
+            author=_client_ip(request))
+        excel_store.clear_staged(token)
+    except Exception as exc:  # noqa: BLE001
+        return _admin_error(request, f"Échec de l'écriture : {type(exc).__name__} — {exc}")
+    return _admin_message(
+        request, f"Import confirmé : le mode réel affiche désormais les données "
+        f"au {staged['date_maj']}.")
+
+
+@app.post("/admin/cancel", response_class=HTMLResponse)
+def admin_cancel(request: Request, token: str = Form(...)):
+    """Abandon d'un import en attente (aucune donnée en place n'a bougé)."""
+    _safe(excel_store.clear_staged, token)
+    return _admin_message(request, "Import annulé. Aucune donnée n'a été modifiée.")
+
+
+@app.post("/admin/rollback", response_class=HTMLResponse)
+def admin_rollback(request: Request):
+    """Réactive l'import précédent (annulation du dernier import confirmé)."""
+    restored = _safe(excel_store.rollback)
+    if not restored:
+        return _admin_error(request, "Rien à annuler (un seul import ou aucun).")
+    return _admin_message(
+        request, f"Retour à l'import précédent : {restored.get('filename', '')} "
+        f"(données au {restored.get('date_maj', '?')}).")
+
+
+# --- Helpers admin ------------------------------------------------------
+def _safe(fn, *args, default=None):
+    """Appelle une fonction du store en absorbant une base indisponible."""
+    try:
+        return fn(*args)
+    except Exception:  # noqa: BLE001
+        return default
+
+
+def _admin_error(request: Request, message: str, details: list | None = None):
+    return templates.TemplateResponse(
+        request, "admin_upload.html",
+        {"active": _safe(excel_store.active_info),
+         "history": _safe(excel_store.history, default=[]) or [],
+         "staged": None, "error": message, "error_details": details, "message": None},
+        status_code=400,
+    )
+
+
+def _admin_message(request: Request, message: str):
+    return templates.TemplateResponse(
+        request, "admin_upload.html",
+        {"active": _safe(excel_store.active_info),
+         "history": _safe(excel_store.history, default=[]) or [],
+         "staged": None, "error": None, "message": message},
+    )
 
 
 if __name__ == "__main__":

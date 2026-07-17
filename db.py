@@ -72,6 +72,42 @@ SCHEMA_STATEMENTS: list[str] = [
         attempted_at TEXT NOT NULL
     )
     """,
+    # Historique des imports Excel (source du mode réel).
+    # Chaque import ajoute une version ; 'active' désigne celle servie par le
+    # dashboard. Le rollback réactive simplement la version précédente : les
+    # anciennes versions restent en base, rien n'est écrasé.
+    #   payload  = dashboard dérivé, sérialisé en JSON (structure get_dashboard_data)
+    #   file_hash = SHA256 du .xlsx importé (traçabilité / détection de doublon)
+    #   volumetrie = nombre de lignes par onglet, en JSON
+    """
+    CREATE TABLE IF NOT EXISTS import_history (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        imported_at TEXT NOT NULL,
+        filename    TEXT,
+        file_hash   TEXT NOT NULL,
+        date_maj    TEXT,
+        volumetrie  TEXT,
+        payload     TEXT NOT NULL,
+        active      INTEGER NOT NULL DEFAULT 0,
+        author      TEXT
+    )
+    """,
+    # Fichier validé en attente de confirmation (workflow /admin/upload).
+    # Nécessaire en serverless : l'upload et le « Confirmer » peuvent atterrir
+    # sur deux instances différentes, donc le staging ne peut pas vivre en
+    # mémoire process. Une entrée par token, purgée à la confirmation/annulation.
+    """
+    CREATE TABLE IF NOT EXISTS import_staging (
+        token       TEXT PRIMARY KEY,
+        created_at  TEXT NOT NULL,
+        filename    TEXT,
+        file_hash   TEXT NOT NULL,
+        date_maj    TEXT,
+        volumetrie  TEXT,
+        payload     TEXT NOT NULL,
+        diff        TEXT
+    )
+    """,
 ]
 
 
@@ -122,6 +158,19 @@ class _SqliteBackend:
         finally:
             conn.close()
 
+    def batch(self, statements: Sequence[tuple[str, Any]]) -> None:
+        """Exécute plusieurs instructions DIFFÉRENTES en une transaction."""
+        conn = self._conn()
+        try:
+            for sql, params in statements:
+                conn.execute(sql, params if params is not None else [])
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
 
 # --- Backend Turso (production serverless) ----------------------------------
 class _TursoBackend:
@@ -163,6 +212,11 @@ class _TursoBackend:
         self._client.batch([(sql, r) for r in rows])
         return len(rows)
 
+    def batch(self, statements: Sequence[tuple[str, Any]]) -> None:
+        """Exécute plusieurs instructions DIFFÉRENTES en une transaction."""
+        self._client.batch([(sql, p) if p is not None else sql
+                            for sql, p in statements])
+
 
 # --- Sélection paresseuse du backend (thread-safe) --------------------------
 _backend: Any = None
@@ -197,6 +251,15 @@ def query(sql: str, params: Any = None) -> list[dict]:
 def execute(sql: str, params: Any = None) -> int:
     """Exécute une instruction d'écriture, renvoie le dernier rowid inséré."""
     return _get_backend().execute(sql, params)
+
+
+def batch(statements: Sequence[tuple[str, Any]]) -> None:
+    """Exécute plusieurs instructions différentes en UNE transaction.
+
+    Utilisé pour les opérations qui ne doivent jamais être partiellement
+    appliquées (ex. bascule de la version active d'un import Excel).
+    """
+    _get_backend().batch(statements)
 
 
 # --- Upserts (comptes / écritures) ------------------------------------------

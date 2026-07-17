@@ -172,6 +172,7 @@ footer{font-size:.6875rem;color:var(--muted);border-top:1px solid var(--line);pa
   </form>
   <div class="side-foot">
     <span class="sync-dot"></span>Dernière synchronisation : <b>{{ d.meta.sync }}</b>
+    <a href="/admin/upload" style="display:block;margin-top:8px;color:#B7AECB;text-decoration:none">Importer un fichier →</a>
   </div>
 </aside>
 
@@ -337,12 +338,14 @@ footer{font-size:.6875rem;color:var(--muted);border-top:1px solid var(--line);pa
 <div id="campDetail" style="display:none">
   <div class="kpis c4" id="campKpis"></div>
   <section style="margin-top:1.375rem">
-  <div class="grid g-2">
+  {# La carte « filières » est masquée si la source ne fournit pas la
+     répartition par campus : la grille passe alors à une seule colonne. #}
+  <div class="grid g-2" id="campGridCharts">
     <div class="card">
       <h3>CA mensuel du campus (k€)</h3>
       <div class="chart-wrap"><canvas id="chCampCA"></canvas></div>
     </div>
-    <div class="card">
+    <div class="card" id="campFilCard">
       <h3>Étudiants par filière</h3>
       <div class="chart-wrap"><canvas id="chCampFil"></canvas></div>
     </div>
@@ -551,9 +554,18 @@ function showCampus(key){
  if(chCampCAInst)chCampCAInst.destroy();
  chCampCAInst=new Chart(chCampCA,{type:'bar',data:{labels:L12,datasets:[{data:c.ca_m,backgroundColor:V,borderRadius:3,barPercentage:.7}]},
   options:{maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:x=>fmt(x.raw)+' k€'}}},scales:{x:{grid:noGrid,ticks:xflat},y:{grid:grid}}}});
- if(chCampFilInst)chCampFilInst.destroy();
- chCampFilInst=new Chart(chCampFil,{type:'bar',data:{labels:c.fil_labels,datasets:[{data:c.fil_data,backgroundColor:CAMPUS_FIL_COLORS,borderRadius:3,barPercentage:.65}]},
-  options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:grid},y:{grid:noGrid}}}});
+ if(chCampFilInst){chCampFilInst.destroy();chCampFilInst=null;}
+ // Répartition par filière absente (non fournie par la source) -> on masque la
+ // carte et la grille repasse sur une seule colonne pour le CA mensuel.
+ const filCard=document.getElementById('campFilCard');
+ const grid2=document.getElementById('campGridCharts');
+ const hasFil=Array.isArray(c.fil_labels)&&c.fil_labels.length>0;
+ filCard.style.display=hasFil?'':'none';
+ grid2.style.gridTemplateColumns=hasFil?'':'1fr';
+ if(hasFil){
+  chCampFilInst=new Chart(chCampFil,{type:'bar',data:{labels:c.fil_labels,datasets:[{data:c.fil_data,backgroundColor:CAMPUS_FIL_COLORS,borderRadius:3,barPercentage:.65}]},
+   options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:grid},y:{grid:noGrid}}}});
+ }
 }
 const sel=document.getElementById('campSel');
 sel.querySelectorAll('button').forEach(b=>b.onclick=()=>{

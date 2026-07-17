@@ -16,5 +16,11 @@ venv/
 # Vercel
 .vercel/
 
+# Fichiers de données Excel (réels) — on ignore tout .xlsx SAUF le template
+# de référence livré avec le dépôt (données fictives, aligné sur le mode démo).
+*.xlsx
+!donnees_dashboard_aurlom.xlsx
+~$*.xlsx
+
 # Divers
 *.tmp

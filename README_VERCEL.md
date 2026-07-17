@@ -19,10 +19,30 @@ protégée par un **mot de passe partagé**, avec base de données **Turso**
 | `db.py`                | Double backend : **SQLite** (dev) / **Turso libsql** (prod) — même API.  |
 | `migrate_to_turso.py`  | Script one-shot : crée le schéma des tables sur Turso.                   |
 | `auth.py`              | Auth mot de passe partagé (bcrypt + cookie signé itsdangerous, 30 j).    |
-| `main.py`              | Middleware d'auth + routes `/login`, `/logout`, `/api/sync` (cron).      |
+| `main.py`              | Middleware d'auth + routes `/login`, `/logout`, `/api/sync`, `/admin/*`. |
+| `excel_source.py`      | Parse + valide le classeur Excel (source du mode réel) → dashboard.      |
+| `excel_store.py`       | Stocke les imports (versionnés) dans Turso ; lecture, diff, rollback.    |
+| `excel_import.py`      | Import en ligne de commande (`--dry-run`, `--rollback`).                 |
 
 En développement (aucune variable Turso), tout continue de tourner sur SQLite
 local, exactement comme avant.
+
+## Mode réel : alimentation par fichier Excel
+
+Le mode réel n'est plus alimenté par la comptabilité fulll mais par le classeur
+`donnees_dashboard_aurlom.xlsx` (contrat de colonnes figé, cf. onglet `LISEZ-MOI`).
+
+- **Interface** : `/admin/upload` (derrière l'authentification) — glisser-déposer
+  le fichier, validation stricte, aperçu de l'impact (diff vs données en place),
+  puis **Confirmer** pour activer. `/admin/rollback` revient à l'import précédent.
+- **CLI** : `python excel_import.py fichier.xlsx` (ajouter `--dry-run` pour
+  valider sans écrire, `--rollback` pour annuler le dernier import).
+- Tant qu'aucun fichier n'a été importé, le mode réel affiche les données de
+  démonstration, chaque bloc portant un badge « démo ».
+
+> Les imports sont versionnés dans la table `import_history` (une seule version
+> active à la fois) : aucune donnée n'est jamais écrasée, le rollback réactive
+> simplement la version précédente. `migrate_to_turso.py` crée ces tables.
 
 ---
 
